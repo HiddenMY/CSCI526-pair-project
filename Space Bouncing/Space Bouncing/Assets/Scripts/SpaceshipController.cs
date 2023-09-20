@@ -10,10 +10,13 @@ public class SpaceshipController : MonoBehaviour
     public float turnSpeed = 45.0f;
     public float forwardSpeed = 10.0f;
     private int bounceTime;
-    public int maxLandingTime = 3;
+    private int landingTime;
+    private int maxBounceTime = 3;
+    public int maxLandingTime = 5;
     public GameObject arrow; // Reference to your arrow GameObject
     private Vector2? collisionNormal = null;
     public TextMeshProUGUI endGameText;
+    public TextMeshProUGUI lifeText;
 
     // Start is called before the first frame update
     void Start()
@@ -22,8 +25,10 @@ public class SpaceshipController : MonoBehaviour
     
         launched = false;
         bounceTime = 0;
+        landingTime = 0;
         arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
 
+        lifeText.text = "landing time left: " + (maxLandingTime - landingTime);
     }
 
     // Update is called once per frame
@@ -60,15 +65,11 @@ public class SpaceshipController : MonoBehaviour
 
         if (collision.gameObject.tag == "Border")
         {
-            launched = false;
-            endGameText.text = "You lose!";
-            endGameText.gameObject.SetActive(true);
+            EndGame(false);
         }
         else if (collision.gameObject.tag == "Finish")
         {
-            launched = false;
-            endGameText.text = "You win!";
-            endGameText.gameObject.SetActive(true);
+            EndGame(true);
         }
         else if (collision.gameObject.tag == "Planet")
         { // collision with planets
@@ -89,11 +90,17 @@ public class SpaceshipController : MonoBehaviour
 
         // deal with landing
         bounceTime++;
-        if (bounceTime == maxLandingTime)
+        if (bounceTime == maxBounceTime)
         {
-            launched = false;
-            bounceTime = 0;
-            arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
+            landingTime++;
+            if (landingTime == maxLandingTime) {
+                EndGame(false);
+            } else {
+                launched = false;
+                bounceTime = 0;
+                arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
+            }
+            lifeText.text = "landing time left: " + (maxLandingTime - landingTime);
         }
     }
 
@@ -112,5 +119,16 @@ public class SpaceshipController : MonoBehaviour
         // The dot product will be negative if the two vectors are more than 90 degrees apart.
         // This means the desired direction is into the planet (i.e., not a valid launch angle).
         return Vector2.Dot(desiredDirection, collisionNormal.Value) >= 0;
+    }
+
+    private void EndGame(bool isWin) {
+        if (isWin) {
+            endGameText.text = "You win!";
+        } else {
+            endGameText.text = "You lose!";
+        }
+        endGameText.gameObject.SetActive(true);
+        // destroy this controller
+        Destroy(this);
     }
 }
