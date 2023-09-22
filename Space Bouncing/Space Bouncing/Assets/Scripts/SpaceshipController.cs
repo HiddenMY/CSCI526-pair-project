@@ -6,61 +6,95 @@ using TMPro;
 public class SpaceshipController : MonoBehaviour
 {
     private bool launched;
+    private bool endGame;
     private float horizontalInput;
-    public float turnSpeed = 45.0f;
-    public float forwardSpeed = 10.0f;
+    public float turnSpeed = 45f;
+    public float forwardSpeed = 10f;
     private int bounceTime;
     private int landingTime;
-    private int maxBounceTime = 3;
+    public int maxBounceTime = 3;
     public int maxLandingTime = 5;
-    public GameObject arrow; // Reference to your arrow GameObject
-    private Vector2? collisionNormal = null;
+    private int currentMaxLandTime;
+    public int badTime = -1;
+    public int goodTime = 1;
+    private Vector2? collisionNormal;
+    public GameObject arrow; // Reference to the arrow GameObject
     public TextMeshProUGUI endGameText;
     public TextMeshProUGUI lifeText;
+    private Vector2 originalPosition;
+    public string instruction = "...";
 
     // Start is called before the first frame update
     void Start()
     {
-        endGameText.gameObject.SetActive(false);  // Initially hide the text
-    
-        launched = false;
-        bounceTime = 0;
-        landingTime = 0;
-        arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
+        originalPosition = transform.position;
 
-        lifeText.text = "landing time left: " + (maxLandingTime - landingTime);
+        endGameText.text = instruction;
+        endGameText.gameObject.SetActive(true); // Show gameplay instructions
+
+        lifeText.gameObject.SetActive(false);
+
+        launched = false;
+        endGame = true;
     }
 
     // Update is called once per frame
     void LateUpdate()
     {
-        // speed control
-        if (launched)
+        if (endGame)
         {
-            transform.Translate(Vector2.up * forwardSpeed * Time.deltaTime);
-        }
-
-        // game start
-        else
-        {
-            horizontalInput = Input.GetAxis("Horizontal");
-
-            float desiredAngle = transform.rotation.eulerAngles.z - turnSpeed * horizontalInput * Time.deltaTime;
-            if (IsValidLaunchAngle(desiredAngle))
+            // Restart the game
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
             {
-                transform.Rotate(Vector3.back, turnSpeed * horizontalInput * Time.deltaTime);
+                transform.position = originalPosition;
+                transform.rotation = Quaternion.Euler(0, 0, 0);
+                collisionNormal = null;
+
+                endGame = false;
+                endGameText.gameObject.SetActive(false); // Hide the ending screen
+
+                bounceTime = 0;
+                landingTime = 0;
+                currentMaxLandTime = maxLandingTime;
+
+                arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
+
+                lifeText.text = "Landings: " + (currentMaxLandTime - landingTime);
+                lifeText.gameObject.SetActive(true);
             }
         }
 
-        // launching the spaceship
-        if (Input.GetKeyDown(KeyCode.Space) && !launched)
+        // game starts
+        else
         {
-            launched = true;
-            arrow.SetActive(false); // Hide the arrow when the spaceship is launched
+            // speed control
+            if (launched)
+            {
+                transform.Translate(Vector2.up * forwardSpeed * Time.deltaTime);
+            }
+
+            // change direction
+            else
+            {
+                horizontalInput = Input.GetAxis("Horizontal");
+                float rotatedAngle = turnSpeed * horizontalInput * Time.deltaTime;
+
+                if (IsValidLaunchAngle(transform.rotation.eulerAngles.z - rotatedAngle))
+                {
+                    transform.Rotate(Vector3.back, rotatedAngle);
+                }
+
+                // launching the spaceship
+                if (Input.GetKeyDown(KeyCode.Space))
+                {
+                    launched = true;
+                    arrow.SetActive(false); // Hide the arrow when the spaceship is launched
+                }
+            }
         }
     }
 
-    void OnCollisionEnter2D(Collision2D collision)
+    private void OnCollisionEnter2D(Collision2D collision)
     {
 
         if (collision.gameObject.tag == "Border")
@@ -71,36 +105,60 @@ public class SpaceshipController : MonoBehaviour
         {
             EndGame(true);
         }
-        else if (collision.gameObject.tag == "Planet")
-        { // collision with planets
-            CollideWithPlanet(collision);
+
+        // collision with planets
+        else if (collision.gameObject.tag == "badPlanet")
+        {
+            CollideWithPlanet(collision, badTime);
+        }
+        else if (collision.gameObject.tag == "goodPlanet")
+        {
+            CollideWithPlanet(collision, goodTime);
         }
     }
 
-    private void CollideWithPlanet(Collision2D collision)
+    private void CollideWithPlanet(Collision2D collision, int timeChange)
     {
         // reflection
-        float angleZ = (transform.rotation.eulerAngles.z + 90) * Mathf.Deg2Rad;
-        Vector2 prevDir = new Vector2(Mathf.Cos(angleZ), Mathf.Sin(angleZ));
-        Vector2 outDir = Vector2.Reflect(prevDir, collision.GetContact(0).normal);
-        angleZ = Mathf.Atan2(outDir.y, outDir.x);
-        transform.rotation = Quaternion.Euler(0, 0, angleZ * Mathf.Rad2Deg - 90);
 
-        collisionNormal = collision.GetContact(0).normal;
+        // Get the contact normal of the first contact point
+        Vector2 contactNormal = collision.contacts[0].normal;
+        collisionNormal = contactNormal;
+
+        // Get the current rotation angle of the object (assuming the object's rotation is in Z-axis)
+        float rotationAngle = transform.rotation.eulerAngles.z + 90;
+
+        // Convert the rotation angle to a direction vector
+        Vector2 rotationDirection = new Vector2(Mathf.Cos(Mathf.Deg2Rad * rotationAngle), Mathf.Sin(Mathf.Deg2Rad * rotationAngle));
+
+        // Reflect the rotation direction vector against the contact normal
+        Vector2 reflectedDirection = Vector2.Reflect(rotationDirection, contactNormal);
+
+        // Calculate the new rotation angle from the reflected direction
+        float newRotationAngle = Mathf.Atan2(reflectedDirection.y, reflectedDirection.x) * Mathf.Rad2Deg;
+
+        // Set the new rotation angle to the object
+        transform.rotation = Quaternion.Euler(0f, 0f, newRotationAngle - 90);
 
         // deal with landing
         bounceTime++;
+
+        currentMaxLandTime += timeChange;
+        lifeText.text = "Landings: " + (currentMaxLandTime - landingTime);
+
         if (bounceTime == maxBounceTime)
         {
+            launched = false;
+            bounceTime = 0;
+            arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
+
             landingTime++;
-            if (landingTime == maxLandingTime) {
-                EndGame(false);
-            } else {
-                launched = false;
-                bounceTime = 0;
-                arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
-            }
-            lifeText.text = "landing time left: " + (maxLandingTime - landingTime);
+            lifeText.text = "Landings: " + (currentMaxLandTime - landingTime);
+        }
+
+        if (landingTime == currentMaxLandTime)
+        {
+            EndGame(false);
         }
     }
 
@@ -121,14 +179,21 @@ public class SpaceshipController : MonoBehaviour
         return Vector2.Dot(desiredDirection, collisionNormal.Value) >= 0;
     }
 
-    private void EndGame(bool isWin) {
-        if (isWin) {
-            endGameText.text = "You win!";
-        } else {
-            endGameText.text = "You lose!";
+    private void EndGame(bool isWin)
+    {
+        launched = false;
+        lifeText.gameObject.SetActive(false);
+
+        if (isWin)
+        {
+            endGameText.text = "You Win! ^_^\nPress ENTER to Replay!";
         }
+        else
+        {
+            endGameText.text = "You Lose! >_<\nPress ENTER to Replay!";
+        }
+
+        endGame = true;
         endGameText.gameObject.SetActive(true);
-        // destroy this controller
-        Destroy(this);
     }
 }
