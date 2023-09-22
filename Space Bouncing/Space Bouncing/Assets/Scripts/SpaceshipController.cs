@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -22,14 +23,16 @@ public class SpaceshipController : MonoBehaviour
     public TextMeshProUGUI endGameText;
     public TextMeshProUGUI lifeText;
     private Vector2 originalPosition;
-    public string instruction = "...";
 
     // Start is called before the first frame update
     void Start()
     {
         originalPosition = transform.position;
 
-        endGameText.text = instruction;
+        endGameText.text = "Use Left/Right or A/D to rotate the Spaceship,\nPress SPACE to Launch!\n"
+                         + "\nSpaceship bounces twice before landing.\nReach the Yellow planet within remaining Launches.\n"
+                         + "\nTouching the Blue planet earns bonus steps,\nTouching the Red planet charges penalty steps.\n"
+                         + "\nPress ENTER to Start!";
         endGameText.gameObject.SetActive(true); // Show gameplay instructions
 
         lifeText.gameObject.SetActive(false);
@@ -59,7 +62,7 @@ public class SpaceshipController : MonoBehaviour
 
                 arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
 
-                lifeText.text = "Landings: " + (currentMaxLandTime - landingTime);
+                lifeText.text = "Launches: " + Math.Max(currentMaxLandTime - landingTime, 0);
                 lifeText.gameObject.SetActive(true);
             }
         }
@@ -88,7 +91,10 @@ public class SpaceshipController : MonoBehaviour
                 if (Input.GetKeyDown(KeyCode.Space))
                 {
                     launched = true;
+                    landingTime++;
                     arrow.SetActive(false); // Hide the arrow when the spaceship is launched
+
+                    lifeText.text = "Launches: " + Math.Max(currentMaxLandTime - landingTime, 0);
                 }
             }
         }
@@ -142,58 +148,57 @@ public class SpaceshipController : MonoBehaviour
 
         // deal with landing
         bounceTime++;
-
         currentMaxLandTime += timeChange;
-        lifeText.text = "Landings: " + (currentMaxLandTime - landingTime);
+        lifeText.text = "Launches: " + Math.Max(currentMaxLandTime - landingTime, 0);
 
-        if (bounceTime == maxBounceTime)
+        if (bounceTime >= maxBounceTime)
         {
             launched = false;
             bounceTime = 0;
             arrow.SetActive(true); // Show the arrow when the spaceship is to be launched
 
-            landingTime++;
-            lifeText.text = "Landings: " + (currentMaxLandTime - landingTime);
-        }
-
-        if (landingTime == currentMaxLandTime)
-        {
-            EndGame(false);
+            if (landingTime >= currentMaxLandTime)
+            {
+                EndGame(false);
+            }
         }
     }
 
     private bool IsValidLaunchAngle(float desiredAngle)
     {
-        if (!collisionNormal.HasValue)
+        if (collisionNormal.HasValue)
+        {
+            // Calculate the forward direction of the spaceship for the desired angle
+            float desiredAngleInRadians = (desiredAngle + 90) * Mathf.Deg2Rad;
+            Vector2 desiredDirection = new Vector2(Mathf.Cos(desiredAngleInRadians), Mathf.Sin(desiredAngleInRadians));
+
+            // The dot product will be negative if the two vectors are more than 90 degrees apart.
+            // This means the desired direction is into the planet (i.e., not a valid launch angle).
+            return Vector2.Dot(desiredDirection, collisionNormal.Value) > 0;
+        }
+
+        else
         {
             // If there's no collision normal (i.e., the spaceship hasn't hit a planet yet), any angle is valid.
             return true;
         }
-
-        // Calculate the forward direction of the spaceship for the desired angle
-        float desiredAngleInRadians = (desiredAngle + 90) * Mathf.Deg2Rad;
-        Vector2 desiredDirection = new Vector2(Mathf.Cos(desiredAngleInRadians), Mathf.Sin(desiredAngleInRadians));
-
-        // The dot product will be negative if the two vectors are more than 90 degrees apart.
-        // This means the desired direction is into the planet (i.e., not a valid launch angle).
-        return Vector2.Dot(desiredDirection, collisionNormal.Value) >= 0;
     }
 
     private void EndGame(bool isWin)
     {
         launched = false;
+        endGame = true;
+
         lifeText.gameObject.SetActive(false);
 
         if (isWin)
         {
-            endGameText.text = "You Win! ^_^\nPress ENTER to Replay!";
+            endGameText.text = "You Win! ^_^\n\nPress ENTER to Replay!";
         }
         else
         {
-            endGameText.text = "You Lose! >_<\nPress ENTER to Replay!";
+            endGameText.text = "You Lose! >_<\n\nPress ENTER to Replay!";
         }
-
-        endGame = true;
         endGameText.gameObject.SetActive(true);
     }
 }
